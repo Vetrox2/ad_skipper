@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 2
+names: ['close_button', 'start_button']
+
+roboflow:
+  workspace: vetroxs-workspace
+  project: my-first-project-syvi2
+  version: dataset
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/vetroxs-workspace/my-first-project-syvi2/dataset/dataset
