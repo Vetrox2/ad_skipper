@@ -2,8 +2,8 @@ train: ../train/images
 val: ../valid/images
 test: ../test/images
 
-nc: 3
-names: ['close_button', 'start_button', 'store_logo']
+nc: 5
+names: ['close_button', 'glosnik', 'kupno_button', 'start_button', 'store_logo']
 
 roboflow:
   workspace: vetroxs-workspace
