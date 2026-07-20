@@ -1,0 +1,20 @@
+[
+  {
+    "class": "close_button",
+    "tool_path": "tools/click.py",
+    "tool_class": "ClickTool",
+    "priority": 100,
+    "params": {
+      "sleep_s": 2.0
+    }
+  },
+  {
+    "class": "start_button",
+    "tool_path": "tools/click.py",
+    "tool_class": "ClickTool",
+    "priority": 50,
+    "params": {
+      "sleep_s": 3.0
+    }
+  }
+]

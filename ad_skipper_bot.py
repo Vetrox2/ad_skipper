@@ -9,34 +9,38 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-CLOSE_CLASS = "close_button"
-START_CLASS = "start_button"
-TARGET_CLASSES = {CLOSE_CLASS, START_CLASS}
+from adb_actions import tap
+from agent_config import AgentSettings
+from agent_runtime import AgentRuntime
+from tools.base import DetectionContext, ToolServices
 
 
 class AdSkipperBot:
     def __init__(
         self,
-        model_path: Path,
+        runtime: AgentRuntime,
         adb_address: str = "127.0.0.1:5555",
-        conf_threshold: float = 0.60,
-        scan_interval: float = 1.5,
-        click_cooldown: float = 2.0,
-        anomaly_repeats: int = 5,
-        anomaly_pause_s: float = 10.0,
+        conf_threshold: float | None = None,
+        scan_interval: float | None = None,
+        click_cooldown: float | None = None,
+        anomaly_repeats: int | None = None,
+        anomaly_pause_s: float | None = None,
     ) -> None:
-        self.model_path = model_path
-        self.model = YOLO(str(model_path))
+        self.runtime = runtime
+        self.model_path = runtime.model_path
+        self.model = YOLO(str(runtime.model_path))
         self.adb_address = adb_address
-        self.conf_threshold = conf_threshold
-        self.scan_interval = scan_interval
-        self.click_cooldown = click_cooldown
-        self.anomaly_repeats = anomaly_repeats
-        self.anomaly_pause_s = anomaly_pause_s
+        self.conf_threshold = conf_threshold if conf_threshold is not None else runtime.settings.conf_threshold
+        self.scan_interval = scan_interval if scan_interval is not None else runtime.settings.scan_interval
+        self.click_cooldown = click_cooldown if click_cooldown is not None else runtime.settings.click_cooldown
+        self.anomaly_repeats = anomaly_repeats if anomaly_repeats is not None else runtime.settings.anomaly_repeats
+        self.anomaly_pause_s = anomaly_pause_s if anomaly_pause_s is not None else runtime.settings.anomaly_pause_s
 
         self.last_click: Optional[Tuple[int, int]] = None
         self.same_click_count = 0
         self.last_frame_hash: Optional[int] = None
+        self.logger = logging.getLogger(__name__)
+        self.services = ToolServices(click=lambda x, y: tap(self.adb_address, x, y), sleep=time.sleep, logger=self.logger)
 
         logging.info("Inicjalizacja AdSkipperBot...")
         self.connect_adb()
@@ -47,7 +51,7 @@ class AdSkipperBot:
             num_classes = len(self.model.names)
             class_names = ", ".join([f"{i}={name}" for i, name in self.model.names.items()])
             logging.info("Model zaladowany - Klasy (%d): [%s]", num_classes, class_names)
-            logging.info("TARGET_CLASSES szukane: %s", TARGET_CLASSES)
+            logging.info("Tooly dla klas: %s", ", ".join(sorted(self.runtime.tools_by_class)))
             
             # Log model input size
             try:
@@ -123,14 +127,6 @@ class AdSkipperBot:
         sampled = frame[::16, ::16]
         return hash(sampled.tobytes())
 
-    def click(self, x: int, y: int) -> bool:
-        logging.info("Akcja -> Klikniecie ADB na pozycji (%s, %s)", x, y)
-        result = self._run_adb(["-s", self.adb_address, "shell", "input", "tap", str(x), str(y)], timeout=10)
-        if result.returncode != 0:
-            logging.warning("Nie udalo sie wykonac klikniecia: %s", result.stderr.decode(errors="ignore").strip())
-            return False
-        return True
-
     def _update_anomaly_state(self, click_point: Tuple[int, int], frame_hash_value: int) -> bool:
         if self.last_click == click_point and self.last_frame_hash == frame_hash_value:
             self.same_click_count += 1
@@ -156,12 +152,9 @@ class AdSkipperBot:
 
         return False
 
-    def _select_click_target(self, results) -> Optional[Tuple[Tuple[int, int], str]]:
-        # Priorytet: najpierw zamkniecie reklamy, potem uruchomienie kolejnej.
-        best_close = None
-        best_close_conf = -1.0
-        best_start = None
-        best_start_conf = -1.0
+    def _select_click_target(self, results) -> Optional[DetectionContext]:
+        best_target: Optional[DetectionContext] = None
+        best_rank: tuple[int, float] = (-10**9, -1.0)
         total_detections = 0
         low_conf_detections = 0
         all_detections_log = []
@@ -181,8 +174,8 @@ class AdSkipperBot:
                 all_detections_log.append(detection_info)
                 logging.info("RAW YOLO: %s", detection_info)
                 
-                if class_name not in TARGET_CLASSES:
-                    logging.debug("  -> Ignorowane (klasa nie w TARGET_CLASSES)")
+                if class_name not in self.runtime.tools_by_class:
+                    logging.debug("  -> Ignorowane (brak toola dla klasy)")
                     continue
 
                 if confidence < self.conf_threshold:
@@ -194,14 +187,34 @@ class AdSkipperBot:
                 x_click = int((xyxy[0] + xyxy[2]) / 2)
                 y_click = int((xyxy[1] + xyxy[3]) / 2)
 
-                if class_name == CLOSE_CLASS and confidence > best_close_conf:
-                    best_close_conf = confidence
-                    best_close = ((x_click, y_click), class_name)
-                    logging.debug("  -> Nowy best close: (%.2f)", confidence)
-                elif class_name == START_CLASS and confidence > best_start_conf:
-                    best_start_conf = confidence
-                    best_start = ((x_click, y_click), class_name)
-                    logging.debug("  -> Nowy best start: (%.2f)", confidence)
+                tool_definition = self.runtime.tool_definitions[class_name]
+                candidate = DetectionContext(
+                    class_name=class_name,
+                    confidence=confidence,
+                    bounding_box=(int(xyxy[0]), int(xyxy[1]), int(xyxy[2]), int(xyxy[3])),
+                    center=(x_click, y_click),
+                    frame_hash=0,
+                    iteration=0,
+                    agent_root=self.runtime.agent_dir,
+                    frame=None,
+                    extras={
+                        "tool_path": str(tool_definition.tool_path),
+                        "tool_class": tool_definition.tool_class,
+                        "priority": tool_definition.priority,
+                        **tool_definition.params,
+                    },
+                )
+
+                candidate_rank = (tool_definition.priority, confidence)
+                if candidate_rank > best_rank:
+                    best_rank = candidate_rank
+                    best_target = candidate
+                    logging.debug(
+                        "  -> Nowy best target: %s (priority=%s, confidence=%.2f)",
+                        class_name,
+                        tool_definition.priority,
+                        confidence,
+                    )
 
         if total_detections > 0:
             logging.info("Wyniki YOLO: %d detections, %d ponizej progu | Wszystkie: [%s]", 
@@ -209,9 +222,7 @@ class AdSkipperBot:
         else:
             logging.info("YOLO: BRAK DETECTIONS - wszystkie klasy i progi")
 
-        if best_close is not None:
-            return best_close
-        return best_start
+        return best_target
 
     def run(self) -> None:
         logging.info("Bot uruchomiony. Monitorowanie reklam w tle...")
@@ -247,49 +258,39 @@ class AdSkipperBot:
             target = self._select_click_target(results)
 
             if target is not None:
-                click_point, target_class = target
+                target.frame = frame
+                target.frame_hash = frame_hash_value
+                target.iteration = iteration
 
-                if self._update_anomaly_state(click_point, frame_hash_value):
+                if self._update_anomaly_state(target.center, frame_hash_value):
                     continue
 
-                logging.info("Wykryto cel klasy '%s'", target_class)
-                clicked = self.click(*click_point)
-                if clicked:
-                    time.sleep(self.click_cooldown)
+                tool = self.runtime.tools_by_class.get(target.class_name)
+                if tool is None:
+                    logging.warning("Brak toola dla wykrytej klasy '%s'", target.class_name)
+                    time.sleep(self.scan_interval)
+                    continue
+
+                logging.info("Wykryto cel klasy '%s'", target.class_name)
+                result = tool.handle(target, self.services)
+                if result.handled:
+                    sleep_s = result.sleep_s if result.sleep_s is not None else self.click_cooldown
+                    time.sleep(sleep_s)
                     continue
 
             time.sleep(self.scan_interval)
 
 
-def resolve_model_path(model_arg: str) -> Path:
-    explicit_path = Path(model_arg).expanduser()
-    if explicit_path.exists():
-        return explicit_path.resolve()
-
-    base_dir = Path(__file__).resolve().parent
-    fallback_paths = [
-        base_dir / model_arg,
-        base_dir / "models" / model_arg,
-        base_dir / "weights" / model_arg,
-    ]
-
-    for path in fallback_paths:
-        if path.exists():
-            return path.resolve()
-
-    raise FileNotFoundError(
-        f"Nie znaleziono modelu '{model_arg}'. Sprawdzone sciezki: {explicit_path}, "
-        + ", ".join(str(p) for p in fallback_paths)
-    )
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Automatyczny skipper reklam przez ADB + YOLOv8")
-    parser.add_argument("--model", default="best.pt", help="Sciezka do wag YOLOv8 (domyslnie: best.pt)")
+    parser.add_argument("--agent-dir", default="models", help="Katalog agenta z config.json i best.pt")
+    parser.add_argument("--model", default=None, help="Opcjonalna bezposrednia sciezka do wag YOLOv8")
     parser.add_argument("--adb", default="127.0.0.1:5555", help="Adres ADB emulatora")
-    parser.add_argument("--conf", type=float, default=0.05, help="Prog pewnosci detekcji (domyslnie: 0.05)")
+    parser.add_argument("--conf", type=float, default=None, help="Prog pewnosci detekcji (domyslnie: wartosc z AgentSettings, 0.90)")
     parser.add_argument("--scan-interval", type=float, default=2.0, help="Interwal probkowania ekranu")
     parser.add_argument("--click-cooldown", type=float, default=4.0, help="Pauza po skutecznym kliknieciu")
+    parser.add_argument("--anomaly-repeats", type=int, default=5, help="Liczba powtorzen klikniecia przed pauza")
+    parser.add_argument("--anomaly-pause", type=float, default=10.0, help="Pauza po wykryciu petli false-positive")
     return parser.parse_args()
 
 
@@ -306,17 +307,30 @@ def main() -> None:
     args = parse_args()
 
     try:
-        model_path = resolve_model_path(args.model)
+        settings_kwargs = {
+            "scan_interval": args.scan_interval,
+            "click_cooldown": args.click_cooldown,
+            "anomaly_repeats": args.anomaly_repeats,
+            "anomaly_pause_s": args.anomaly_pause,
+        }
+        if args.conf is not None:
+            settings_kwargs["conf_threshold"] = args.conf
+        agent_settings = AgentSettings(**settings_kwargs)
+        agent_runtime = AgentRuntime.from_agent_dir(
+            Path(args.agent_dir),
+            settings=agent_settings,
+            model_override=args.model,
+        )
     except FileNotFoundError as exc:
         logging.error(str(exc))
         return
+    except Exception as exc:
+        logging.error("Nie udalo sie wczytac agenta: %s", exc)
+        return
 
     bot = AdSkipperBot(
-        model_path=model_path,
+        runtime=agent_runtime,
         adb_address=args.adb,
-        conf_threshold=args.conf,
-        scan_interval=args.scan_interval,
-        click_cooldown=args.click_cooldown,
     )
     bot.run()
 
