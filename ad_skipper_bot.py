@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-from adb_actions import tap
+from adb_actions import force_stop_app, switch_to_app, tap
 from agent_config import AgentSettings
 from agent_runtime import AgentRuntime
 from tools.base import DetectionContext, ToolServices
@@ -40,7 +40,13 @@ class AdSkipperBot:
         self.same_click_count = 0
         self.last_frame_hash: Optional[int] = None
         self.logger = logging.getLogger(__name__)
-        self.services = ToolServices(click=lambda x, y: tap(self.adb_address, x, y), sleep=time.sleep, logger=self.logger)
+        self.services = ToolServices(
+            click=lambda x, y: tap(self.adb_address, x, y),
+            sleep=time.sleep,
+            logger=self.logger,
+            switch_app=lambda package: switch_to_app(self.adb_address, package),
+            close_app=lambda package: force_stop_app(self.adb_address, package),
+        )
 
         logging.info("Inicjalizacja AdSkipperBot...")
         self.connect_adb()

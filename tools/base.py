@@ -34,6 +34,8 @@ class ToolServices:
     click: Callable[[int, int], bool]
     sleep: Callable[[float], None]
     logger: logging.Logger
+    switch_app: Callable[[str], bool] | None = None
+    close_app: Callable[[str], bool] | None = None
 
 
 class BaseTool(ABC):

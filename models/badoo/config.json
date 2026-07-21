@@ -25,5 +25,16 @@
     "params": {
       "sleep_s": 30.0
     }
+  },
+  {
+    "class": "store_logo",
+    "tool_path": "tools/switch_app.py",
+    "tool_class": "SwitchAppTool",
+    "priority": 80,
+    "params": {
+      "package": "com.badoo.mobile",
+      "sleep_s": 4.0,
+      "close_source_package": "com.android.vending"
+    }
   }
 ]

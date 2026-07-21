@@ -15,5 +15,5 @@ class ClickTool(BaseTool):
         services.logger.info("Tool click -> %s at (%s, %s)", context.class_name, x, y)
         if services.click(x, y):
             sleep_s = self.config.get("sleep_s", self.config.get("cooldown_s"))
-            return ToolResult(handled=True, sleep_s=sleep_s, message=f"clicked {context.class_name}")
+            return ToolResult(handled=True, sleep_s=sleep_s, message=f"clicked {context.class_name}, waiting {sleep_s}s")
         return ToolResult(handled=False, message=f"click failed for {context.class_name}")

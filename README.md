@@ -100,6 +100,36 @@ Przyklad `config.json`:
 
 Tool dostaje standardowy kontekst detekcji: nazwe klasy, confidence, bounding box, srodek, numer iteracji, hash ramki i `extras` na dane specyficzne dla toola. Kazdy tool dziedziczy po bazowej klasie `BaseTool` i implementuje `handle(context, services)`.
 
+### SwitchAppTool (`tools/switch_app.py`)
+
+Sluzy do wracania do aplikacji docelowej, gdy reklama mimo klikniecia w
+`close_button` i tak przekierowala do innej aplikacji (typowo Google Play).
+Po wykryciu skonfigurowanej klasy (np. `google_play_store`) przelacza z
+powrotem na aplikacje podana w `params.package` - karty nowej aplikacji nie
+trzeba zamykac, ale mozna to opcjonalnie wlaczyc przez `close_source_package`.
+
+Przyklad wpisu w `config.json`:
+
+```json
+{
+	"class": "google_play_store",
+	"tool_path": "tools/switch_app.py",
+	"tool_class": "SwitchAppTool",
+	"priority": 200,
+	"params": {
+		"package": "com.badoo.mobile",
+		"sleep_s": 2.0,
+		"close_source_package": "com.android.vending"
+	}
+}
+```
+
+Uwagi:
+
+- `package` to package_name aplikacji docelowej (sprawdz dokladna wartosc np. przez `adb shell pm list packages | grep badoo`).
+- `priority` warto ustawic wysoko, zeby ta klasa wygrywala, jesli akurat nakladalaby sie z innymi wykryciami na tej samej klatce.
+- `close_source_package` jest opcjonalne (np. `com.android.vending` dla Google Play) i domyslnie nieaktywne - gdy podane, po przelaczeniu bot dodatkowo force-stopuje te aplikacje.
+
 ## Zabezpieczenia
 
 - Auto-reconnect ADB po bledzie pobrania ramki.
