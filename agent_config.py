@@ -34,7 +34,7 @@ class AgentConfig:
 
 @dataclass(slots=True)
 class AgentSettings:
-    conf_threshold: float = 0.90
+    conf_threshold: float = 0.6
     scan_interval: float = 1.5
     click_cooldown: float = 2.0
     anomaly_repeats: int = 5

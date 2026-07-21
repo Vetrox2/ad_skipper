@@ -52,14 +52,14 @@ class AdSkipperBot:
             class_names = ", ".join([f"{i}={name}" for i, name in self.model.names.items()])
             logging.info("Model zaladowany - Klasy (%d): [%s]", num_classes, class_names)
             logging.info("Tooly dla klas: %s", ", ".join(sorted(self.runtime.tools_by_class)))
-            
+
             # Log model input size
             try:
                 model_input_size = self.model.model.yaml.get('imgsz', 'unknown')
                 logging.info("Model expected input size: %s", model_input_size)
             except:
                 pass
-                
+
         except Exception as exc:
             logging.warning("Blad przy logowaniu informacji modelu: %s", exc)
 
@@ -115,10 +115,10 @@ class AdSkipperBot:
             return None
 
         logging.debug("Pomyslnie przechwycono ekran: %s", frame.shape)
-        
+
         # Convert BGR to RGB for YOLO (OpenCV reads as BGR)
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
+
         return frame
 
     @staticmethod
@@ -146,18 +146,16 @@ class AdSkipperBot:
             time.sleep(self.anomaly_pause_s)
             self.same_click_count = 0
             return True
-        
+
         if self.same_click_count > 1:
             logging.debug("Powtorzenie tego samego kliku: %d razy", self.same_click_count)
 
         return False
 
-    def _select_click_target(self, results) -> Optional[DetectionContext]:
+    def _select_click_target(self, results, iteration: int) -> Optional[DetectionContext]:
         best_target: Optional[DetectionContext] = None
         best_rank: tuple[int, float] = (-10**9, -1.0)
-        total_detections = 0
-        low_conf_detections = 0
-        all_detections_log = []
+        detections_summary: list[str] = []
 
         for result in results:
             boxes = result.boxes
@@ -165,23 +163,19 @@ class AdSkipperBot:
                 continue
 
             for box in boxes:
-                total_detections += 1
                 cls_id = int(box.cls[0])
                 class_name = self.model.names[cls_id]
                 confidence = float(box.conf[0])
-                
-                detection_info = f"{class_name}={confidence:.3f}"
-                all_detections_log.append(detection_info)
-                logging.info("RAW YOLO: %s", detection_info)
-                
+
                 if class_name not in self.runtime.tools_by_class:
-                    logging.debug("  -> Ignorowane (brak toola dla klasy)")
+                    detections_summary.append(f"{class_name}:{confidence:.2f}(brak-toola)")
                     continue
 
                 if confidence < self.conf_threshold:
-                    low_conf_detections += 1
-                    logging.debug("  -> Poniżej progu pewnosci (%.2f < %.2f)", confidence, self.conf_threshold)
+                    detections_summary.append(f"{class_name}:{confidence:.2f}(ponizej-progu)")
                     continue
+
+                detections_summary.append(f"{class_name}:{confidence:.2f}(OK)")
 
                 xyxy = box.xyxy[0].cpu().numpy()
                 x_click = int((xyxy[0] + xyxy[2]) / 2)
@@ -209,18 +203,16 @@ class AdSkipperBot:
                 if candidate_rank > best_rank:
                     best_rank = candidate_rank
                     best_target = candidate
-                    logging.debug(
-                        "  -> Nowy best target: %s (priority=%s, confidence=%.2f)",
-                        class_name,
-                        tool_definition.priority,
-                        confidence,
-                    )
 
-        if total_detections > 0:
-            logging.info("Wyniki YOLO: %d detections, %d ponizej progu | Wszystkie: [%s]", 
-                        total_detections, low_conf_detections, ", ".join(all_detections_log))
+        if detections_summary:
+            logging.info(
+                "[iter %d] Wykrycia: %s -> wybrano: %s",
+                iteration,
+                ", ".join(detections_summary),
+                best_target.class_name if best_target else "brak",
+            )
         else:
-            logging.info("YOLO: BRAK DETECTIONS - wszystkie klasy i progi")
+            logging.info("[iter %d] Brak wykrycia", iteration)
 
         return best_target
 
@@ -241,21 +233,20 @@ class AdSkipperBot:
                 continue
 
             frame_hash_value = self.frame_hash(frame)
-            
+
             # Log frame statistics (first iteration only)
             if iteration == 1:
-                logging.info("Frame stats: shape=%s, dtype=%s, min=%d, max=%d, mean=%.1f", 
+                logging.info("Frame stats: shape=%s, dtype=%s, min=%d, max=%d, mean=%.1f",
                            frame.shape, frame.dtype, frame.min(), frame.max(), frame.mean())
 
             try:
-                logging.debug("[iter %d] Uruchamianie inferencji YOLO...", iteration)
                 results = self.model(frame, verbose=False, conf=self.conf_threshold)
             except Exception as exc:  # noqa: BLE001
                 logging.exception("Blad podczas inferencji YOLO: %s", exc)
                 time.sleep(self.scan_interval)
                 continue
 
-            target = self._select_click_target(results)
+            target = self._select_click_target(results, iteration)
 
             if target is not None:
                 target.frame = frame
@@ -291,20 +282,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--click-cooldown", type=float, default=4.0, help="Pauza po skutecznym kliknieciu")
     parser.add_argument("--anomaly-repeats", type=int, default=5, help="Liczba powtorzen klikniecia przed pauza")
     parser.add_argument("--anomaly-pause", type=float, default=10.0, help="Pauza po wykryciu petli false-positive")
+    parser.add_argument("--verbose", action="store_true", help="Wlacz szczegolowe logi DEBUG")
     return parser.parse_args()
 
 
-def configure_logging() -> None:
+def configure_logging(verbose: bool = False) -> None:
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.DEBUG if verbose else logging.INFO,
         format="%(asctime)s | %(levelname)s | %(message)s",
         datefmt="%H:%M:%S",
     )
 
 
 def main() -> None:
-    configure_logging()
     args = parse_args()
+    configure_logging(verbose=args.verbose)
 
     try:
         settings_kwargs = {
