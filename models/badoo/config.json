@@ -16,5 +16,14 @@
     "params": {
       "sleep_s": 3.0
     }
+  },
+  {
+    "class": "ok_button",
+    "tool_path": "tools/click.py",
+    "tool_class": "ClickTool",
+    "priority": 120,
+    "params": {
+      "sleep_s": 30.0
+    }
   }
 ]
