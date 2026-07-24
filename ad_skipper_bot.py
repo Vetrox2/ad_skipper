@@ -81,6 +81,22 @@ class AdSkipperBot:
 
     def connect_adb(self) -> None:
         logging.info("Laczenie z BlueStacks przez ADB na porcie %s...", self.adb_address)
+
+        try:
+            subprocess.run(
+                ["adb", "start-server"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=20,
+            )
+        except subprocess.TimeoutExpired:
+            logging.warning("Timeout podczas startu serwera adb (20s).")
+        except FileNotFoundError:
+            logging.error("Nie znaleziono komendy 'adb' w PATH.")
+            return
+        except Exception as exc:
+            logging.warning("Blad podczas startu serwera adb: %s", exc)
+
         try:
             result = self._run_adb(["connect", self.adb_address], timeout=10)
             if result.returncode == 0:
