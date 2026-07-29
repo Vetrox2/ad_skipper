@@ -1,4 +1,3 @@
-import argparse
 import logging
 import subprocess
 import time
@@ -12,6 +11,7 @@ from ultralytics import YOLO
 from adb_actions import force_stop_app, switch_to_app, tap
 from agent_config import AgentSettings
 from agent_runtime import AgentRuntime
+from env_settings import load_env_config
 from tools.base import DetectionContext, ToolServices
 
 
@@ -294,20 +294,6 @@ class AdSkipperBot:
             time.sleep(self.scan_interval)
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Automatyczny skipper reklam przez ADB + YOLOv8")
-    parser.add_argument("--agent-dir", default="models", help="Katalog agenta z config.json i best.pt")
-    parser.add_argument("--model", default=None, help="Opcjonalna bezposrednia sciezka do wag YOLOv8")
-    parser.add_argument("--adb", default="127.0.0.1:5555", help="Adres ADB emulatora")
-    parser.add_argument("--conf", type=float, default=None, help="Prog pewnosci detekcji (domyslnie: wartosc z AgentSettings, 0.90)")
-    parser.add_argument("--scan-interval", type=float, default=2.0, help="Interwal probkowania ekranu")
-    parser.add_argument("--click-cooldown", type=float, default=4.0, help="Pauza po skutecznym kliknieciu")
-    parser.add_argument("--anomaly-repeats", type=int, default=5, help="Liczba powtorzen klikniecia przed pauza")
-    parser.add_argument("--anomaly-pause", type=float, default=10.0, help="Pauza po wykryciu petli false-positive")
-    parser.add_argument("--verbose", action="store_true", help="Wlacz szczegolowe logi DEBUG")
-    return parser.parse_args()
-
-
 def configure_logging(verbose: bool = False) -> None:
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.INFO,
@@ -317,23 +303,24 @@ def configure_logging(verbose: bool = False) -> None:
 
 
 def main() -> None:
-    args = parse_args()
-    configure_logging(verbose=args.verbose)
+    env_config = load_env_config()
+    configure_logging(verbose=env_config.verbose)
 
     try:
-        settings_kwargs = {
-            "scan_interval": args.scan_interval,
-            "click_cooldown": args.click_cooldown,
-            "anomaly_repeats": args.anomaly_repeats,
-            "anomaly_pause_s": args.anomaly_pause,
+        settings_kwargs: dict[str, float | int] = {
+            "scan_interval": env_config.scan_interval,
+            "click_cooldown": env_config.click_cooldown,
+            "anomaly_repeats": env_config.anomaly_repeats,
+            "anomaly_pause_s": env_config.anomaly_pause_s,
         }
-        if args.conf is not None:
-            settings_kwargs["conf_threshold"] = args.conf
+        if env_config.conf_threshold is not None:
+            settings_kwargs["conf_threshold"] = env_config.conf_threshold
+
         agent_settings = AgentSettings(**settings_kwargs)
         agent_runtime = AgentRuntime.from_agent_dir(
-            Path(args.agent_dir),
+            Path(env_config.agent_dir),
             settings=agent_settings,
-            model_override=args.model,
+            model_override=env_config.model_override,
         )
     except FileNotFoundError as exc:
         logging.error(str(exc))
@@ -344,7 +331,7 @@ def main() -> None:
 
     bot = AdSkipperBot(
         runtime=agent_runtime,
-        adb_address=args.adb,
+        adb_address=env_config.adb_address,
     )
     bot.run()
 

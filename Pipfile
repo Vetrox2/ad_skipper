@@ -8,8 +8,12 @@ ultralytics = "*"
 pure-python-adb = "*"
 opencv-python = "*"
 pillow = "*"
+python-dotenv = "*"
 
 [dev-packages]
 
 [requires]
 python_version = "3.12.2"
+
+[scripts]
+start = "pipenv run python ad_skipper_bot.py --agent-dir models/badoo --adb 127.0.0.1:5555"
