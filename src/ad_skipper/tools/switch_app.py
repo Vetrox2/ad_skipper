@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tools.base import BaseTool, DetectionContext, ToolResult, ToolServices
+from src.ad_skipper.tools.base import BaseTool, DetectionContext, ToolResult, ToolServices
 
 
 class SwitchAppTool(BaseTool):

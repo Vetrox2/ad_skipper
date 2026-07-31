@@ -8,11 +8,11 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-from adb_actions import force_stop_app, switch_to_app, tap
-from agent_config import AgentSettings
-from agent_runtime import AgentRuntime
-from env_settings import load_env_config
-from tools.base import DetectionContext, ToolServices
+from src.ad_skipper.adb import force_stop_app, switch_to_app, tap
+from src.ad_skipper.config import AgentSettings
+from src.ad_skipper.env_settings import load_env_config
+from src.ad_skipper.runtime import AgentRuntime
+from src.ad_skipper.tools.base import DetectionContext, ToolServices
 
 
 class AdSkipperBot:
@@ -299,6 +299,7 @@ def configure_logging(verbose: bool = False) -> None:
         level=logging.DEBUG if verbose else logging.INFO,
         format="%(asctime)s | %(levelname)s | %(message)s",
         datefmt="%H:%M:%S",
+        force=True,
     )
 
 

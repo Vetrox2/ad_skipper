@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
-from agent_config import AgentConfig, AgentSettings, ToolDefinition, load_agent_config
-from tools.base import BaseTool
+from src.ad_skipper.config import AgentConfig, AgentSettings, ToolDefinition, load_agent_config
+from src.ad_skipper.tools.base import BaseTool
 
 
 def _load_module_from_path(path: Path) -> ModuleType:

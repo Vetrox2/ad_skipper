@@ -1,17 +1,29 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
 
 try:
-    from dotenv import load_dotenv  # pip install python-dotenv
+    from dotenv import load_dotenv, find_dotenv  # pip install python-dotenv
 except ImportError:  # pragma: no cover - dziala tez bez zainstalowanego python-dotenv
     load_dotenv = None
+    find_dotenv = None
 
 
-# Domyslnie szukamy .env obok tego pliku (czyli w katalogu projektu).
-DEFAULT_ENV_PATH = Path(__file__).resolve().parent / ".env"
+def _default_env_path() -> Path:
+    """Domyslna lokalizacja .env - katalog roboczy (skad uruchamiasz bota), a nie
+    katalog w ktorym fizycznie lezy ten plik (src/ad_skipper/). Jesli dostepny jest
+    python-dotenv, uzywamy find_dotenv(usecwd=True), ktore szuka .env idac w gore
+    od biezacego katalogu roboczego - dziala niezaleznie od tego, z ktorego
+    podkatalogu repo odpalisz `python -m src.ad_skipper`.
+    """
+    if find_dotenv is not None:
+        located = find_dotenv(usecwd=True)
+        if located:
+            return Path(located)
+    return Path.cwd() / ".env"
 
 
 def _load_env_file(env_path: Path) -> None:
@@ -84,7 +96,9 @@ def load_env_config(env_path: Path | None = None) -> EnvConfig:
     Kazde ustawienie jest opcjonalne - brak wpisu w .env oznacza uzycie tej samej
     wartosci domyslnej, ktora wczesniej byla domyslna wartoscia w argparse.
     """
-    _load_env_file(env_path or DEFAULT_ENV_PATH)
+    resolved_path = env_path or _default_env_path()
+    logging.info("Wczytuje ustawienia z: %s (istnieje: %s)", resolved_path, resolved_path.exists())
+    _load_env_file(resolved_path)
 
     return EnvConfig(
         agent_dir=_get_str("AD_SKIPPER_AGENT_DIR", "models") or "models",
