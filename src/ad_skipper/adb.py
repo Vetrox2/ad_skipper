@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import sys
+
+_SUBPROCESS_FLAGS = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
 
 
 def tap(adb_address: str, x: int, y: int) -> bool:
@@ -12,6 +15,7 @@ def tap(adb_address: str, x: int, y: int) -> bool:
             stderr=subprocess.PIPE,
             check=False,
             timeout=10,
+            **_SUBPROCESS_FLAGS,
         )
     except subprocess.TimeoutExpired:
         logging.warning("Timeout podczas wykonywania klikniecia ADB.")
@@ -51,6 +55,7 @@ def switch_to_app(adb_address: str, package_name: str) -> bool:
             stderr=subprocess.PIPE,
             check=False,
             timeout=10,
+            **_SUBPROCESS_FLAGS,
         )
     except subprocess.TimeoutExpired:
         logging.warning("Timeout podczas przelaczania na aplikacje %s.", package_name)
@@ -90,6 +95,7 @@ def force_stop_app(adb_address: str, package_name: str) -> bool:
             stderr=subprocess.PIPE,
             check=False,
             timeout=10,
+            **_SUBPROCESS_FLAGS,
         )
     except subprocess.TimeoutExpired:
         logging.warning("Timeout podczas zamykania aplikacji %s.", package_name)
@@ -102,4 +108,4 @@ def force_stop_app(adb_address: str, package_name: str) -> bool:
             result.stderr.decode(errors="ignore").strip(),
         )
         return False
-    return True
+    return True

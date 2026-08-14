@@ -1,8 +1,10 @@
 import logging
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Optional, Tuple
+
 
 import cv2
 import numpy as np
@@ -13,6 +15,9 @@ from src.ad_skipper.config import AgentSettings
 from src.ad_skipper.env_settings import load_env_config
 from src.ad_skipper.runtime import AgentRuntime
 from src.ad_skipper.tools.base import DetectionContext, ToolServices
+
+
+_SUBPROCESS_FLAGS = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
 
 
 class AdSkipperBot:
@@ -77,6 +82,7 @@ class AdSkipperBot:
             stderr=subprocess.PIPE,
             check=False,
             timeout=timeout,
+            **_SUBPROCESS_FLAGS,
         )
 
     def connect_adb(self) -> None:
@@ -88,6 +94,7 @@ class AdSkipperBot:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 timeout=20,
+                **_SUBPROCESS_FLAGS,
             )
         except subprocess.TimeoutExpired:
             logging.warning("Timeout podczas startu serwera adb (20s).")
@@ -112,8 +119,14 @@ class AdSkipperBot:
     def capture_screen(self) -> Optional[np.ndarray]:
         command = ["adb", "-s", self.adb_address, "exec-out", "screencap", "-p"]
         try:
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                **_SUBPROCESS_FLAGS,
+            )
             s_bytes, err_bytes = process.communicate(timeout=10)
+
         except subprocess.TimeoutExpired:
             logging.warning("Timeout podczas pobierania zrzutu ekranu.")
             return None
