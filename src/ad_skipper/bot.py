@@ -307,6 +307,11 @@ def main() -> None:
     env_config = load_env_config()
     configure_logging(verbose=env_config.verbose)
 
+    from src.ad_skipper.paths import get_app_root
+    agent_dir_path = Path(env_config.agent_dir)
+    if not agent_dir_path.is_absolute():
+        agent_dir_path = get_app_root() / agent_dir_path
+
     try:
         settings_kwargs: dict[str, float | int] = {
             "scan_interval": env_config.scan_interval,
@@ -319,7 +324,7 @@ def main() -> None:
 
         agent_settings = AgentSettings(**settings_kwargs)
         agent_runtime = AgentRuntime.from_agent_dir(
-            Path(env_config.agent_dir),
+            agent_dir_path,
             settings=agent_settings,
             model_override=env_config.model_override,
         )

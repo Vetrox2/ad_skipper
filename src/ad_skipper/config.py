@@ -5,10 +5,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from src.ad_skipper.paths import get_app_root
+
 # Katalog projektu (tam, gdzie lezy wspolny pakiet `tools/`), a nie katalog
 # konkretnego agenta. Agenci (models/<nazwa>/) maja wlasne best.pt i config.json,
 # ale odwoluja sie do tego samego, wspoldzielonego zestawu tooli.
-PROJECT_ROOT = Path(__file__).resolve().parent
+# Po zamrozeniu wskazuje katalog exe; w trybie zrodlowym - korzen repo.
+PROJECT_ROOT = get_app_root()
 
 
 @dataclass(slots=True)

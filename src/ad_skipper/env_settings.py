@@ -5,6 +5,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.ad_skipper.paths import get_app_root, is_frozen
+
 try:
     from dotenv import load_dotenv, find_dotenv  # pip install python-dotenv
 except ImportError:  # pragma: no cover - dziala tez bez zainstalowanego python-dotenv
@@ -13,12 +15,13 @@ except ImportError:  # pragma: no cover - dziala tez bez zainstalowanego python-
 
 
 def _default_env_path() -> Path:
-    """Domyslna lokalizacja .env - katalog roboczy (skad uruchamiasz bota), a nie
-    katalog w ktorym fizycznie lezy ten plik (src/ad_skipper/). Jesli dostepny jest
-    python-dotenv, uzywamy find_dotenv(usecwd=True), ktore szuka .env idac w gore
-    od biezacego katalogu roboczego - dziala niezaleznie od tego, z ktorego
-    podkatalogu repo odpalisz `python -m src.ad_skipper`.
+    """Domyslna lokalizacja .env.
+
+    - Po zamrozeniu: katalog obok .exe (niezaleznie od CWD).
+    - W trybie zrodlowym: find_dotenv(usecwd=True) idac w gore od CWD.
     """
+    if is_frozen():
+        return get_app_root() / ".env"
     if find_dotenv is not None:
         located = find_dotenv(usecwd=True)
         if located:

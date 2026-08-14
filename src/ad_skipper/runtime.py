@@ -83,6 +83,16 @@ class AgentRuntime:
         model_override: str | None = None,
         tools_root: Path | None = None,
     ) -> "AgentRuntime":
+        from src.ad_skipper.config import PROJECT_ROOT
+        import logging
+        _tools_root = tools_root or PROJECT_ROOT
+        logging.info(
+            "[runtime] PROJECT_ROOT=%s | tools_root=%s | agent_dir=%s",
+            PROJECT_ROOT,
+            _tools_root,
+            agent_dir,
+        )
+
         agent_dir = agent_dir.expanduser().resolve()
         config = load_agent_config(agent_dir, tools_root=tools_root)
 
