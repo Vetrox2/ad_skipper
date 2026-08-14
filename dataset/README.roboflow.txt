@@ -2,7 +2,7 @@
 My First Project - vdataset my-first-project-syvi2
 ==============================
 
-This dataset was exported via roboflow.com on July 24, 2026 at 8:24 PM GMT
+This dataset was exported via roboflow.com on August 14, 2026 at 10:44 AM GMT
 
 Roboflow is an end-to-end computer vision platform that helps you
 * collaborate with your team on computer vision projects
@@ -17,7 +17,7 @@ visit https://github.com/roboflow/notebooks
 
 To find over 100k other datasets and pre-trained models, visit https://universe.roboflow.com
 
-The dataset includes 116 images.
+The dataset includes 129 images.
 Object are annotated in YOLOv8 format.
 
 No pre-processing or augmentation was applied.

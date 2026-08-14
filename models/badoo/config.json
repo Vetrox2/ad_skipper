@@ -23,7 +23,7 @@
     "tool_class": "ClickTool",
     "priority": 120,
     "params": {
-      "sleep_s": 30.0
+      "sleep_s": 600.0
     }
   },
   {
