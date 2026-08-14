@@ -49,23 +49,23 @@ def _resolve_tool_path(tools_root: Path, agent_dir: Path, tool_path_value: str, 
     if tool_path.is_absolute():
         return tool_path
 
-    # Domyslnie toole sa wspoldzielone przez wszystkich agentow i leza w
-    # tools/ w katalogu projektu (np. tools/click.py).
-    shared_candidate = tools_root / tool_path
-    if shared_candidate.exists():
-        return shared_candidate
+    candidates = [
+        tools_root / tool_path,
+        tools_root / "src" / "ad_skipper" / tool_path,
+        tools_root / "src" / "ad_skipper" / "tools" / tool_path.name,
+        agent_dir / tool_path,
+        agent_dir / "tools" / tool_path.name,
+    ]
 
-    # Pozwala agentowi na wlasny, niestandardowy tool trzymany w jego wlasnym
-    # katalogu (np. models/badoo/tools/custom_swipe.py), jesli nie ma go
-    # we wspolnym tools/.
-    agent_candidate = agent_dir / tool_path
-    if agent_candidate.exists():
-        return agent_candidate
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
 
+    checked_paths = ", ".join(str(c) for c in candidates)
     raise FileNotFoundError(
-        f"Nie znaleziono pliku toola dla klasy '{class_name}'. Sprawdzone sciezki: "
-        f"{shared_candidate}, {agent_candidate}"
+        f"Nie znaleziono pliku toola dla klasy '{class_name}'. Sprawdzone sciezki: {checked_paths}"
     )
+
 
 
 def _coerce_tool_definition(tools_root: Path, agent_dir: Path, entry: dict[str, Any]) -> ToolDefinition:

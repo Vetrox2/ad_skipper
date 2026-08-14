@@ -95,6 +95,17 @@ def copy_env_file(dist_dir: Path) -> None:
         print("  Created .env from .env.example")
 
 
+def copy_assets(dist_dir: Path) -> None:
+    assets_src = ROOT / "assets"
+    dst = dist_dir / "assets"
+    if assets_src.exists():
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(assets_src, dst)
+        print(f"  Copied assets/: {[f.name for f in assets_src.glob('*')]}")
+
+
+
 def create_readme(dist_dir: Path, version: str) -> None:
     readme_path = dist_dir / "README.txt"
     content = f"""================================================================================
@@ -207,11 +218,15 @@ def main() -> None:
     print("3/5 Creating models/ directory...")
     ensure_models_dir(target_dist)
 
-    print("4/5 Generating .env...")
+    print("4/6 Generating .env...")
     copy_env_file(target_dist)
 
-    print("5/5 Generating README.txt...")
+    print("5/6 Copying assets/...")
+    copy_assets(target_dist)
+
+    print("6/6 Generating README.txt...")
     create_readme(target_dist, target_version)
+
 
     VERSION_FILE.write_text(normalized_version + "\n", encoding="utf-8")
 

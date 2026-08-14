@@ -238,7 +238,12 @@ class AdSkipperBot:
 
         return best_target
 
-    def run(self) -> None:
+    def run(
+        self,
+        stop_event: "threading.Event | None" = None,
+        pause_event: "threading.Event | None" = None,
+    ) -> None:
+        import threading  # noqa: F401 – only for type hint resolution at runtime
         logging.info("Bot uruchomiony. Monitorowanie reklam w tle...")
         logging.info("Model zaladowany z: %s", self.model_path)
         logging.info("Próg pewnosci: %.2f, Interwal skanowania: %.1fs", self.conf_threshold, self.scan_interval)
@@ -246,6 +251,14 @@ class AdSkipperBot:
 
         iteration = 0
         while True:
+            if stop_event is not None and stop_event.is_set():
+                logging.info("Bot zatrzymany (stop_event).")
+                break
+
+            if pause_event is not None and pause_event.is_set():
+                time.sleep(self.scan_interval)
+                continue
+
             iteration += 1
             frame = self.capture_screen()
             if frame is None:
@@ -303,6 +316,19 @@ def configure_logging(verbose: bool = False) -> None:
     )
 
 
+def build_settings(env_config: "EnvConfig") -> AgentSettings:
+    """Buduje AgentSettings z EnvConfig. Uzywane przez CLI i GUI BotWorker."""
+    settings_kwargs: dict[str, float | int] = {
+        "scan_interval": env_config.scan_interval,
+        "click_cooldown": env_config.click_cooldown,
+        "anomaly_repeats": env_config.anomaly_repeats,
+        "anomaly_pause_s": env_config.anomaly_pause_s,
+    }
+    if env_config.conf_threshold is not None:
+        settings_kwargs["conf_threshold"] = env_config.conf_threshold
+    return AgentSettings(**settings_kwargs)
+
+
 def main() -> None:
     env_config = load_env_config()
     configure_logging(verbose=env_config.verbose)
@@ -313,16 +339,7 @@ def main() -> None:
         agent_dir_path = get_app_root() / agent_dir_path
 
     try:
-        settings_kwargs: dict[str, float | int] = {
-            "scan_interval": env_config.scan_interval,
-            "click_cooldown": env_config.click_cooldown,
-            "anomaly_repeats": env_config.anomaly_repeats,
-            "anomaly_pause_s": env_config.anomaly_pause_s,
-        }
-        if env_config.conf_threshold is not None:
-            settings_kwargs["conf_threshold"] = env_config.conf_threshold
-
-        agent_settings = AgentSettings(**settings_kwargs)
+        agent_settings = build_settings(env_config)
         agent_runtime = AgentRuntime.from_agent_dir(
             agent_dir_path,
             settings=agent_settings,
@@ -343,4 +360,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main()
