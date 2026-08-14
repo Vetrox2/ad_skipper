@@ -17,4 +17,5 @@ python_version = "3.12.2"
 
 [scripts]
 start = "python -m src.ad_skipper"
-build = "python build.py"
+build = "python build.py"
+make-ico = "python -c \"from PIL import Image; Image.open('assets/icon.png').save('assets/icon.ico', format='ICO', sizes=[(16,16), (24,24), (32,32), (48,48), (64,64), (128,128), (256,256)])\""
