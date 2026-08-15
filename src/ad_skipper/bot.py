@@ -1,6 +1,7 @@
 import logging
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Optional, Tuple
@@ -41,13 +42,17 @@ class AdSkipperBot:
         self.anomaly_repeats = anomaly_repeats if anomaly_repeats is not None else runtime.settings.anomaly_repeats
         self.anomaly_pause_s = anomaly_pause_s if anomaly_pause_s is not None else runtime.settings.anomaly_pause_s
 
+        self._stop_event: Optional[threading.Event] = None
+        self._pause_event: Optional[threading.Event] = None
+        self._reset_cooldown_event: Optional[threading.Event] = None
+
         self.last_click: Optional[Tuple[int, int]] = None
         self.same_click_count = 0
         self.last_frame_hash: Optional[int] = None
         self.logger = logging.getLogger(__name__)
         self.services = ToolServices(
             click=lambda x, y: tap(self.adb_address, x, y),
-            sleep=time.sleep,
+            sleep=self.interruptible_sleep,
             logger=self.logger,
             switch_app=lambda package: switch_to_app(self.adb_address, package),
             close_app=lambda package: force_stop_app(self.adb_address, package),
@@ -162,6 +167,34 @@ class AdSkipperBot:
         sampled = frame[::16, ::16]
         return hash(sampled.tobytes())
 
+    def interruptible_sleep(self, duration: float) -> bool:
+        """Czeka wskazana liczbe sekund z mozliwoscia natychmiastowego przerwania.
+
+        Zwraca False jesli przerwano przez stop_event, True jesli zakonczono (naturalnie lub przez reset cooldownu).
+        """
+        if duration <= 0:
+            return True
+
+        end_time = time.monotonic() + duration
+        while True:
+            if self._stop_event is not None and self._stop_event.is_set():
+                return False
+            if self._reset_cooldown_event is not None and self._reset_cooldown_event.is_set():
+                self._reset_cooldown_event.clear()
+                logging.info("Cooldown zresetowany recznie przez uzytkownika.")
+                return True
+
+            remaining = end_time - time.monotonic()
+            if remaining <= 0:
+                return True
+
+            step = min(remaining, 0.1)
+            if self._stop_event is not None:
+                if self._stop_event.wait(step):
+                    return False
+            else:
+                time.sleep(step)
+
     def _update_anomaly_state(self, click_point: Tuple[int, int], frame_hash_value: int) -> bool:
         if self.last_click == click_point and self.last_frame_hash == frame_hash_value:
             self.same_click_count += 1
@@ -178,7 +211,7 @@ class AdSkipperBot:
                 self.same_click_count,
                 self.anomaly_pause_s,
             )
-            time.sleep(self.anomaly_pause_s)
+            self.interruptible_sleep(self.anomaly_pause_s)
             self.same_click_count = 0
             return True
 
@@ -255,8 +288,12 @@ class AdSkipperBot:
         self,
         stop_event: "threading.Event | None" = None,
         pause_event: "threading.Event | None" = None,
+        reset_cooldown_event: "threading.Event | None" = None,
     ) -> None:
-        import threading  # noqa: F401 – only for type hint resolution at runtime
+        self._stop_event = stop_event
+        self._pause_event = pause_event
+        self._reset_cooldown_event = reset_cooldown_event
+
         logging.info("Bot uruchomiony. Monitorowanie reklam w tle...")
         logging.info("Model zaladowany z: %s", self.model_path)
         logging.info("Próg pewnosci: %.2f, Interwal skanowania: %.1fs", self.conf_threshold, self.scan_interval)
@@ -269,15 +306,22 @@ class AdSkipperBot:
                 break
 
             if pause_event is not None and pause_event.is_set():
-                time.sleep(self.scan_interval)
+                if not self.interruptible_sleep(0.2):
+                    logging.info("Bot zatrzymany (stop_event).")
+                    break
                 continue
 
             iteration += 1
             frame = self.capture_screen()
             if frame is None:
+                if stop_event is not None and stop_event.is_set():
+                    logging.info("Bot zatrzymany (stop_event).")
+                    break
                 logging.warning("Blad pobierania ekranu. Proba ponownego polaczenia...")
                 self.connect_adb()
-                time.sleep(2)
+                if not self.interruptible_sleep(2):
+                    logging.info("Bot zatrzymany (stop_event).")
+                    break
                 continue
 
             frame_hash_value = self.frame_hash(frame)
@@ -291,7 +335,9 @@ class AdSkipperBot:
                 results = self.model(frame, verbose=False, conf=self.conf_threshold)
             except Exception as exc:  # noqa: BLE001
                 logging.exception("Blad podczas inferencji YOLO: %s", exc)
-                time.sleep(self.scan_interval)
+                if not self.interruptible_sleep(self.scan_interval):
+                    logging.info("Bot zatrzymany (stop_event).")
+                    break
                 continue
 
             target = self._select_click_target(results, iteration)
@@ -302,22 +348,34 @@ class AdSkipperBot:
                 target.iteration = iteration
 
                 if self._update_anomaly_state(target.center, frame_hash_value):
+                    if stop_event is not None and stop_event.is_set():
+                        logging.info("Bot zatrzymany (stop_event).")
+                        break
                     continue
 
                 tool = self.runtime.tools_by_class.get(target.class_name)
                 if tool is None:
                     logging.warning("Brak toola dla wykrytej klasy '%s'", target.class_name)
-                    time.sleep(self.scan_interval)
+                    if not self.interruptible_sleep(self.scan_interval):
+                        logging.info("Bot zatrzymany (stop_event).")
+                        break
                     continue
 
                 logging.info("Wykryto cel klasy '%s'", target.class_name)
                 result = tool.handle(target, self.services)
+                if stop_event is not None and stop_event.is_set():
+                    logging.info("Bot zatrzymany (stop_event).")
+                    break
                 if result.handled:
                     sleep_s = result.sleep_s if result.sleep_s is not None else self.click_cooldown
-                    time.sleep(sleep_s)
+                    if not self.interruptible_sleep(sleep_s):
+                        logging.info("Bot zatrzymany (stop_event).")
+                        break
                     continue
 
-            time.sleep(self.scan_interval)
+            if not self.interruptible_sleep(self.scan_interval):
+                logging.info("Bot zatrzymany (stop_event).")
+                break
 
 
 def configure_logging(verbose: bool = False) -> None:

@@ -21,6 +21,7 @@ class BotWorker(QThread):
         self.adb_address = adb_address
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
+        self.reset_cooldown_event = threading.Event()
 
     def run(self) -> None:
         try:
@@ -34,11 +35,18 @@ class BotWorker(QThread):
             return
 
         self.status_changed.emit("running")
-        bot.run(stop_event=self.stop_event, pause_event=self.pause_event)
+        bot.run(
+            stop_event=self.stop_event,
+            pause_event=self.pause_event,
+            reset_cooldown_event=self.reset_cooldown_event,
+        )
         self.status_changed.emit("stopped")
 
     def request_stop(self) -> None:
         self.stop_event.set()
+
+    def reset_cooldown(self) -> None:
+        self.reset_cooldown_event.set()
 
     def toggle_pause(self) -> bool:
         """Toggleuje pauze. Zwraca True jesli bot jest teraz wstrzymany."""

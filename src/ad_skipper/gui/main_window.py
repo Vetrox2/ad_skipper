@@ -132,6 +132,13 @@ class MainWindow(QMainWindow):
         btn_row.setSpacing(8)
         btn_row.addStretch()
 
+        self._reset_cooldown_btn = QPushButton("Resetuj cooldown")
+        self._reset_cooldown_btn.setObjectName("reset_cooldown_btn")
+        self._reset_cooldown_btn.setFixedWidth(130)
+        self._reset_cooldown_btn.setEnabled(False)
+        self._reset_cooldown_btn.clicked.connect(self._on_reset_cooldown_clicked)
+        btn_row.addWidget(self._reset_cooldown_btn)
+
         self._pause_btn = QPushButton("Pauza")
         self._pause_btn.setObjectName("pause_btn")
         self._pause_btn.setFixedWidth(110)
@@ -236,6 +243,14 @@ class MainWindow(QMainWindow):
                 border-color: #5a5a25;
                 color: #e8e0a0;
             }
+            QPushButton#reset_cooldown_btn:enabled {
+                background-color: #2b3a42;
+                border-color: #3e5866;
+                color: #cde4ec;
+            }
+            QPushButton#reset_cooldown_btn:enabled:hover {
+                background-color: #364954;
+            }
             QPushButton#refresh_btn {
                 background-color: #1e2e50;
                 border-color: #2a4080;
@@ -289,6 +304,7 @@ class MainWindow(QMainWindow):
 
         self._model_combo.setEnabled(False)
         self._refresh_btn.setEnabled(False)
+        self._reset_cooldown_btn.setEnabled(True)
         self._pause_btn.setEnabled(True)
         self._pause_btn.setText("Pauza")
         self._start_stop_btn.setText("■  Stop")
@@ -302,6 +318,7 @@ class MainWindow(QMainWindow):
         self._set_status("Zatrzymuję...", "#c09030")
         self._start_stop_btn.setEnabled(False)
         self._pause_btn.setEnabled(False)
+        self._reset_cooldown_btn.setEnabled(False)
         self._worker.request_stop()
         # Nieblokujące – on_worker_finished wywoła się gdy QThread skończy
         QTimer.singleShot(100, self._poll_worker_stop)
@@ -318,9 +335,15 @@ class MainWindow(QMainWindow):
         is_paused = self._worker.toggle_pause()
         self._pause_btn.setText("Wznów" if is_paused else "Pauza")
 
+    def _on_reset_cooldown_clicked(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.reset_cooldown()
+            logging.info("Zadanie natychmiastowego resetu cooldownu wyslane do bota.")
+
     def _on_worker_finished(self) -> None:
         self._model_combo.setEnabled(True)
         self._refresh_btn.setEnabled(True)
+        self._reset_cooldown_btn.setEnabled(False)
         self._pause_btn.setEnabled(False)
         self._pause_btn.setText("Pauza")
         self._start_stop_btn.setEnabled(True)
