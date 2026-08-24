@@ -1,60 +1,63 @@
-# Projekt: Ad Skipper
+# Project: Ad Skipper
 
-Automatyczny skipper reklam dla BlueStacks wykorzystujący ADB oraz model detekcji obrazu YOLOv8.
+Automated advertisement skipper for BlueStacks and Android emulators utilizing ADB and YOLOv8 object detection.
 
-## Struktura projektu
-- `src/ad_skipper/bot.py` - Główna pętla programu pobierająca obrazki z ADB i odpytująca YOLO.
-- `src/ad_skipper/adb.py` - Klasy obsługujące połączenie z emulatorem przez ADB (`pure-python-adb`).
-- `src/ad_skipper/tools/` - Wbudowane "narzędzia" wykonujące akcje po wykryciu obiektu:
-  - `base.py` - Klasa bazowa `BaseTool`.
-  - `click.py` - Narzędzie do klikania w wyznaczony punkt.
-  - `switch_app.py` - Narzędzie powracające do docelowej aplikacji, gdy reklama wymusi wyjście.
-- `src/ad_skipper/gui/` - Moduł GUI (PySide6):
-  - `__main_gui__.py` - Entry point GUI (uruchamia `MainWindow`).
-  - `main_window.py` - Główne okno aplikacji (QMainWindow): combobox modelu, logi, Start/Stop/Pauza.
-  - `bot_worker.py` - `BotWorker(QThread)` opakowujący `AdSkipperBot` z obsługą `stop_event`/`pause_event`.
-  - `log_handler.py` - `QtLogHandler` – bridge między `logging` a sygnałem Qt (`log_line`).
-  - `model_scanner.py` - `list_agents()` skanuje `models/` i zwraca listę `AgentEntry`.
-- `models/<agent_name>/` - Katalogi zawierające plik wag modelu `best.pt` oraz definicję akcji `config.json` przypisanych do detekcji.
-- `dataset/` - Katalog na surowe zbiory danych YOLO (np. z Roboflow).
-- `runs/` - Katalog wynikowy z procesu trenowania YOLO.
-- `dist/` - Katalog zawierający zbudowane paczki dystrybucyjne (`dist/ad_skipper_v<wersja>/`).
-- `build.py` - Skrypt budujący dystrybucję .exe przez PyInstallera z wersjonowaniem.
-- `ad_skipper.spec` - Specyfikacja PyInstallera (entry point: GUI; zbiera ultralytics, torch, cv2, PySide6).
-- `VERSION` - Plik przechowujący bieżącą wersję projektu.
-- `01_plan_build_exe.md`, `02_plan_gui.md` - Notatki/plany rozwoju projektu.
+## Project Structure
+- `src/ad_skipper/bot.py` - Core bot loop capturing screens via ADB and running YOLO inference.
+- `src/ad_skipper/adb.py` - ADB communication wrappers (`pure-python-adb` / adb CLI commands).
+- `src/ad_skipper/config.py` - Agent configuration and dynamic tool path resolution.
+- `src/ad_skipper/runtime.py` - Dynamic module loading for tools and `AgentRuntime` lifecycle.
+- `src/ad_skipper/env_settings.py` - Environment configuration loading (`.env` parser).
+- `src/ad_skipper/paths.py` - Application root path helper (frozen PyInstaller / development source mode).
+- `src/ad_skipper/tools/` - Built-in action tools executed upon object detection:
+  - `base.py` - `BaseTool` abstract base class, `DetectionContext`, `ToolServices`.
+  - `click.py` - `ClickTool` for tapping detected target coordinates.
+  - `switch_app.py` - `SwitchAppTool` for refocusing the target app and closing redirects.
+- `src/ad_skipper/gui/` - GUI application module (PySide6):
+  - `__main_gui__.py` - GUI entry point (`MainWindow`).
+  - `main_window.py` - Main window (model selection, live log view, Start/Stop/Pause, Cooldown reset).
+  - `bot_worker.py` - `BotWorker(QThread)` wrapping `AdSkipperBot` with thread-safe stop/pause/cooldown events.
+  - `log_handler.py` - `QtLogHandler` logging handler emitting Qt signals to the UI.
+  - `model_scanner.py` - `list_agents()` scanning `models/` for available agents.
+- `models/<agent_name>/` - Agent directories containing `best.pt` weights and `config.json` action definitions.
+- `dataset/` - Directory for raw YOLO datasets (e.g. Roboflow exports).
+- `runs/` - Output directory from YOLO training runs.
+- `dist/` - Output directory containing built distribution packages (`dist/ad_skipper_v<version>/`).
+- `build.py` - PyInstaller distribution build script with automatic version bumping.
+- `ad_skipper.spec` - PyInstaller spec configuration (windowed GUI entry point).
+- `VERSION` - File storing current project version.
 
-## Uruchamianie i Budowanie
-Projekt używa `pipenv` do zarządzania środowiskiem (Python 3.12.2).
-- Instalacja: `pipenv install`
-- Uruchomienie GUI: `pipenv run gui`
-- Uruchomienie skippera (CLI): `pipenv run start --agent-dir models/badoo --adb 127.0.0.1:5555`
-  (lub bezpośrednio: `python -m src.ad_skipper ...`)
-- Trenowanie YOLO: `pipenv run yolo detect train data=dataset/data.yaml model=yolov8n.pt epochs=100 imgsz=640`
-- Budowanie wersji produkcyjnej (.exe):
-  - `pipenv run build` (lub `python build.py`) – automatycznie podbija wersję minor (+1)
-  - `python build.py 1.0.0` (lub `-v 1.0.0` / `--version 1.0.0`) – buduje ze wskazaną wersją
-  - Paczka wynikowa trafia do `dist/ad_skipper_v<wersja>/` (zawiera `.exe`, `_internal/`, `tools/`, `models/`, `.env`, `README.txt`).
-  - Build produkuje exe GUI (bez konsoli); tryb CLI nadal dostępny lokalnie przez `pipenv run start`.
+## Running and Building
+Environment managed via `pipenv` (Python 3.12.2).
+- Install dependencies: `pipenv install`
+- Run GUI: `pipenv run gui`
+- Run CLI bot: `pipenv run start` (or `python -m src.ad_skipper`)
+- Train YOLO: `pipenv run yolo detect train data=dataset/data.yaml model=yolov8n.pt epochs=100 imgsz=640`
+- Build distribution (.exe):
+  - `pipenv run build` (or `python build.py`) - auto-increments minor version (+1)
+  - `python build.py 1.0.0` (or `-v 1.0.0` / `--version 1.0.0`) - builds specific version
+  - Build output is placed in `dist/ad_skipper_v<version>/` (contains `.exe`, `_internal/`, `tools/`, `models/`, `.env`, `README.txt`).
 
-
-## Architektura Toole & Konfiguracja
-Każdy model definiuje logikę w `config.json`:
+## Tool Architecture & Configuration
+Each agent defines detection-to-action bindings in `config.json`:
 ```json
 [
   {
     "class": "close_button",
-    "tool_path": "src.ad_skipper.tools.click",
+    "tool_path": "tools/click.py",
     "tool_class": "ClickTool",
-    "priority": 100
+    "priority": 100,
+    "params": {
+      "sleep_s": 2.0
+    }
   }
 ]
 ```
-Narzędzia otrzymują `context` (klasę, confidence, pozycję bounding box, środek ekranu itp.) i wykonują akcje. Katalog bazowy z narzędziami to `src/ad_skipper/tools/` (uwaga: starsza dokumentacja może wskazywać na `tools/`).
+Tools receive `DetectionContext` (class name, confidence, bounding box, center coordinates, frame hash, extra params) and execute actions via `ToolServices`.
 
-## AI Guidelines (Wytyczne optymalizacji kodu / oszczędzania tokenów)
-- Odpowiadaj zwięźle, dostarczaj tylko żądany kod lub modyfikacje, pomijaj niepotrzebne wyjaśnienia.
-- Nie tłumacz oczywistych koncepcji z Pythona, YOLO czy ADB, chyba że o to poproszono.
-- Modyfikując klasę lub funkcję pokazuj głównie to, co ulega zmianie, pomijaj resztę ciała pliku jeśli nie jest to konieczne do zrozumienia szerszego kontekstu.
-- Skupiaj się na modułowości – zachowaj podział na klasę `BaseTool` i zunifikowany interfejs.
-- Pisz kod zgodny z typowaniem statycznym w Pythonie.
+## AI Guidelines
+- Keep responses concise and focused on the requested code or modifications.
+- Do not explain obvious Python, YOLO, or ADB concepts unless explicitly requested.
+- When modifying classes/functions, show primarily changed sections.
+- Maintain modularity – adhere to `BaseTool` and unified service interfaces.
+- Write code compliant with static typing in Python.
