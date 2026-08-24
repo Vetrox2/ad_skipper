@@ -148,3 +148,15 @@ The output package is placed in `dist/ad_skipper_v<version>/` and includes:
 - `models/` (model directories)
 - `.env` (configuration file)
 - `assets/` & `README.txt`
+
+## Releasing on GitHub
+
+1. *(Optional)* Add your changelog into `release_notes.md` in the project root.
+2. Deploy the release:
+   ```bash
+   pipenv run release
+   # Or release a specific version:
+   python release.py 1.0.0
+   ```
+This compresses the distribution directory into `dist/ad_skipper_v<version>.zip` and creates/updates a GitHub Release with the ZIP asset and release notes. Authentication is handled automatically via your logged-in Git session (Git Credential Manager), `gh` CLI, or optional `GITHUB_TOKEN`.
+

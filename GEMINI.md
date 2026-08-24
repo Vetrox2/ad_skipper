@@ -24,10 +24,11 @@ Automated advertisement skipper for BlueStacks and Android emulators utilizing A
 - `runs/` - Output directory from YOLO training runs.
 - `dist/` - Output directory containing built distribution packages (`dist/ad_skipper_v<version>/`).
 - `build.py` - PyInstaller distribution build script with automatic version bumping.
+- `release.py` - GitHub Release deploy script (packages dist ZIP, uploads asset and release notes).
 - `ad_skipper.spec` - PyInstaller spec configuration (windowed GUI entry point).
 - `VERSION` - File storing current project version.
 
-## Running and Building
+## Running, Building & Releasing
 Environment managed via `pipenv` (Python 3.12.2).
 - Install dependencies: `pipenv install`
 - Run GUI: `pipenv run gui`
@@ -37,6 +38,25 @@ Environment managed via `pipenv` (Python 3.12.2).
   - `pipenv run build` (or `python build.py`) - auto-increments minor version (+1)
   - `python build.py 1.0.0` (or `-v 1.0.0` / `--version 1.0.0`) - builds specific version
   - Build output is placed in `dist/ad_skipper_v<version>/` (contains `.exe`, `_internal/`, `tools/`, `models/`, `.env`, `README.txt`).
+- Deploy release to GitHub:
+  - `pipenv run release` (or `python release.py`) - deploys latest version in `dist/`
+  - `python release.py 1.0.0` (or `-v 1.0.0`) - deploys specific version
+  - Authenticates automatically via Git Credential Manager (logged in Git session), `gh` CLI, or `GITHUB_TOKEN`.
+
+
+## Writing Release Notes
+- Create or edit `release_notes.md` in the project root (ignored by git).
+- Structure release notes using standard markdown:
+  ```markdown
+  ## What's Changed
+  - Summary of features or improvements
+  - Bug fixes and optimizations
+  
+  ## Package Details
+  - Assets included: `ad_skipper_v<version>.zip`
+  ```
+- `release.py` automatically reads `release_notes.md` content and attaches it as the GitHub release body.
+
 
 ## Tool Architecture & Configuration
 Each agent defines detection-to-action bindings in `config.json`:
